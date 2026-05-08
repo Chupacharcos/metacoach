@@ -143,14 +143,31 @@ def analyze_blood(data: dict, sex: str = "h") -> dict:
 
 # ── Generación de plan semanal ────────────────────────────────────────────────
 
-def generate_weekly_plan(profile: dict, wearable_analysis: dict, blood_analysis: dict) -> dict:
-    """Genera un plan semanal personalizado usando LLM."""
-    llm = ChatGroq(
-        model=os.getenv("MODEL_NAME", "llama-3.1-70b-versatile"),
+def _fallback_plan(raw: str) -> dict:
+    """Plan mínimo cuando el LLM no devuelve JSON parseable."""
+    return {
+        "resumen_fisiologico": "El asistente no devolvió un plan estructurado. Revisa el texto adjunto y vuelve a intentarlo.",
+        "plan_entrenamiento": {day: {"tipo": "Ver descripción", "duracion": "45min", "descripcion": raw[:200]} for day in WEEKDAYS},
+        "nutricion": {"calorias_objetivo": 2000, "proteina_g": 150, "carbohidratos_g": 200, "grasas_g": 70, "recomendaciones": []},
+        "suplementacion": [],
+        "prioridad_semana": "Reintentar generación",
+    }
+
+
+def _make_llm(primary: bool = True) -> ChatGroq:
+    """LLM principal (70b) o fallback rápido (8b) para casos de rate-limit/error."""
+    model = os.getenv("MODEL_NAME", "llama-3.3-70b-versatile") if primary else "llama-3.1-8b-instant"
+    return ChatGroq(
+        model=model,
         temperature=0.4,
         max_tokens=1800,
         api_key=os.getenv("GROQ_API_KEY"),
     )
+
+
+def generate_weekly_plan(profile: dict, wearable_analysis: dict, blood_analysis: dict) -> dict:
+    """Genera un plan semanal personalizado usando LLM."""
+    llm = _make_llm(primary=True)
 
     age = profile.get("age", 30)
     weight = profile.get("weight_kg", 75)
@@ -224,10 +241,31 @@ REGLAS:
 - Responde ÚNICAMENTE con el JSON, sin texto adicional"""
 
     import json
-    response = llm.invoke(prompt)
-    content = response.content.strip()
+    import logging
+    logger = logging.getLogger("metacoach")
+
+    def _invoke(active_llm):
+        return active_llm.invoke(prompt).content.strip()
+
+    try:
+        content = _invoke(llm)
+    except Exception as primary_err:
+        msg = str(primary_err)
+        logger.error(f"[generate_plan] LLM primario falló: {msg[:200]}")
+        if "rate_limit" in msg.lower() or "429" in msg:
+            logger.warning("[generate_plan] rate-limit en 70b, cayendo a llama-3.1-8b-instant")
+            try:
+                content = _invoke(_make_llm(primary=False))
+            except Exception as fb_err:
+                logger.error(f"[generate_plan] fallback 8b también falló: {fb_err}")
+                raise RuntimeError(
+                    "Servicio de IA temporalmente saturado. Inténtalo de nuevo en unos minutos."
+                ) from fb_err
+        else:
+            raise
 
     # Extraer JSON de la respuesta
+    raw_content = content
     if "```json" in content:
         content = content.split("```json")[1].split("```")[0].strip()
     elif "```" in content:
@@ -235,15 +273,18 @@ REGLAS:
 
     try:
         plan = json.loads(content)
-    except Exception:
-        # Fallback si el JSON falla
-        plan = {
-            "resumen_fisiologico": "Plan generado basado en tus datos fisiológicos.",
-            "plan_entrenamiento": {day: {"tipo": "Ver descripción", "duracion": "45min", "descripcion": content[:200]} for day in WEEKDAYS},
-            "nutricion": {"calorias_objetivo": 2000, "proteina_g": 150, "carbohidratos_g": 200, "grasas_g": 70, "recomendaciones": []},
-            "suplementacion": [],
-            "prioridad_semana": "Recuperación y consistencia",
-        }
+    except Exception as e:
+        logger.error(f"[generate_plan] JSON inválido — primeros 500 chars: {raw_content[:500]}")
+        # Fallback: intentar extraer el primer bloque {...} del texto
+        import re
+        match = re.search(r"\{.*\}", content, re.DOTALL)
+        if match:
+            try:
+                plan = json.loads(match.group(0))
+            except Exception:
+                plan = _fallback_plan(raw_content)
+        else:
+            plan = _fallback_plan(raw_content)
 
     return {
         "plan": plan,
@@ -257,7 +298,7 @@ REGLAS:
 def get_or_create_chat_session(session_id: str, profile: dict, plan_context: str) -> dict:
     if session_id not in _sessions:
         llm = ChatGroq(
-            model=os.getenv("MODEL_NAME", "llama-3.1-70b-versatile"),
+            model=os.getenv("MODEL_NAME", "llama-3.3-70b-versatile"),
             temperature=0.3,
             max_tokens=600,
             api_key=os.getenv("GROQ_API_KEY"),
