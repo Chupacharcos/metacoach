@@ -1,7 +1,7 @@
 """MetaCoach — Endpoints FastAPI"""
 
 import uuid
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from typing import Optional
 from metacoach import (
@@ -105,3 +105,24 @@ def reference_ranges():
         "hrv_zones": HRV_ZONES,
         "sleep_zones": SLEEP_ZONES,
     }
+
+
+MAX_ACTIVITY_BYTES = 10 * 1024 * 1024  # un TCX de una maratón ronda 1-2 MB
+
+
+@router.post("/import/activity")
+async def import_activity(file: UploadFile = File(...)):
+    """Importa un GPX o TCX exportado de un reloj/app y devuelve los campos
+    utilizables para `/generate-plan`, más los que ese formato NO puede aportar.
+
+    Evita el OAuth de Strava/Garmin: el usuario exporta el fichero y lo sube,
+    sin que el integrador necesite registrar una aplicación de terceros.
+    """
+    content = await file.read()
+    if len(content) > MAX_ACTIVITY_BYTES:
+        raise HTTPException(status_code=413, detail="Fichero demasiado grande (máx. 10 MB).")
+    try:
+        from activity_import import parse_activity
+        return {"ok": True, **parse_activity(content, file.filename or "")}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
