@@ -1,6 +1,34 @@
 # MetaCoach: Asistente de Inteligencia Artificial para el Desarrollo Personal
 MetaCoach es un proyecto de IA/ML que busca revolucionar la forma en que nos desarrollamos personal y profesionalmente. Nuestro objetivo es proporcionar una herramienta innovadora y accesible que ayude a las personas a alcanzar sus metas y objetivos.
 
+<!-- LOOP-MAP:START (generado por `php artisan project:loop readme` — no editar a mano) -->
+
+## El bucle que cierra
+
+<p align="center"><img src="https://adrianmoreno-dev.com/bucle/metacoach.svg" alt="Mapa del bucle de MetaCoach" width="900"></p>
+
+**Para** quien gestiona su plan de entrenamiento y nutrición · **Cada semana**
+
+| Etapa | Qué pasa | Quién |
+|---|---|---|
+| **1. Disparador** | Quiero ajustar mi plan de entrenamiento y nutrición para la semana que empieza. | persona |
+| **2. Acción** | Lee el fichero de actividad y los datos fisiológicos (HRV, sueño, pulso en reposo) y genera el plan de la semana. | software |
+| **3. Medición** | Un plan semanal con entrenamiento, nutrición y suplementación, más los avisos fisiológicos que apliquen. | software |
+| **4. Decisión** | Decido si sigo el plan tal cual, lo ajusto a mano o le pido que lo replantee. | persona |
+
+### Lo que no hace
+
+- No se conecta con Strava ni Garmin: el fichero GPX o TCX se exporta y se sube a mano.
+- No guarda historial entre semanas: cada plan sale de los datos que subes en ese momento.
+- No deduce el sueño ni el HRV del fichero de actividad: esos valores se pasan aparte.
+
+### Por qué está construido así
+
+- **Subir el fichero GPX/TCX** en vez de integración OAuth con Strava o Garmin — El OAuth obliga a registrar una aplicación y a que el usuario apruebe permisos. Con el fichero se prueba en un minuto.
+- **Nada se escribe en disco** en vez de guardar perfil y conversaciones en una base de datos — El fichero se parsea durante la petición y se descarta. Quien lo despliegue decide si quiere persistir algo.
+
+<!-- LOOP-MAP:END -->
+
 ## ¿Qué hace?
 MetaCoach utiliza técnicas de aprendizaje automático para analizar patrones y comportamientos, y proporciona recomendaciones personalizadas para mejorar el desempeño y el bienestar. Nuestro modelo de IA se entrena con datos de alta calidad para garantizar la precisión y la eficacia de nuestras recomendaciones.
 
