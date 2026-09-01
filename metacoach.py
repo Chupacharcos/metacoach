@@ -154,9 +154,17 @@ def _fallback_plan(raw: str) -> dict:
     }
 
 
+# 2026-09-01: Groq retiró la familia Llama (404 model_not_found) y la demo
+# fallaba en toda generación de plan. Modelos DISTINTOS a los de los agentes de
+# NeuralOps (openai/gpt-oss-*): el límite de tokens/minuto es por modelo, así
+# que una tarea de fondo no puede dejar sin cuota a un visitante.
+PRIMARY_MODEL = "qwen/qwen3.8-27b"
+FALLBACK_MODEL = "groq/compound-mini"
+
+
 def _make_llm(primary: bool = True) -> ChatGroq:
-    """LLM principal (70b) o fallback rápido (8b) para casos de rate-limit/error."""
-    model = os.getenv("MODEL_NAME", "llama-3.3-70b-versatile") if primary else "llama-3.1-8b-instant"
+    """LLM principal o fallback rápido para casos de rate-limit/error."""
+    model = os.getenv("MODEL_NAME", PRIMARY_MODEL) if primary else FALLBACK_MODEL
     return ChatGroq(
         model=model,
         temperature=0.4,
@@ -253,7 +261,7 @@ REGLAS:
         msg = str(primary_err)
         logger.error(f"[generate_plan] LLM primario falló: {msg[:200]}")
         if "rate_limit" in msg.lower() or "429" in msg:
-            logger.warning("[generate_plan] rate-limit en 70b, cayendo a llama-3.1-8b-instant")
+            logger.warning(f"[generate_plan] rate-limit en el primario, cayendo a {FALLBACK_MODEL}")
             try:
                 content = _invoke(_make_llm(primary=False))
             except Exception as fb_err:
@@ -298,7 +306,7 @@ REGLAS:
 def get_or_create_chat_session(session_id: str, profile: dict, plan_context: str) -> dict:
     if session_id not in _sessions:
         llm = ChatGroq(
-            model=os.getenv("MODEL_NAME", "llama-3.3-70b-versatile"),
+            model=os.getenv("MODEL_NAME", PRIMARY_MODEL),
             temperature=0.3,
             max_tokens=600,
             api_key=os.getenv("GROQ_API_KEY"),
