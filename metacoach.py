@@ -159,7 +159,14 @@ def _fallback_plan(raw: str) -> dict:
 # NeuralOps (openai/gpt-oss-*): el límite de tokens/minuto es por modelo, así
 # que una tarea de fondo no puede dejar sin cuota a un visitante.
 PRIMARY_MODEL = "qwen/qwen3.8-27b"
-FALLBACK_MODEL = "groq/compound-mini"
+# 2026-09-22: el respaldo era `groq/compound-mini`, que NO existe en el
+# catálogo de la cuenta — devolvía 404 model_not_found. O sea que desde el
+# 2026-09-01 la demo no tenía respaldo: al primer rate-limit del primario, el
+# plan semanal fallaba igual. Ahora apunta a gpt-oss-20b, que sí existe y es el
+# modelo del chatbot: es otra demo, no un agente de fondo, así que en el peor
+# caso dos demos se reparten un minuto en vez de que una tarea de fondo deje
+# sin cuota a un visitante. Lo vigila neuralops/tests/test_llm_aislamiento.py.
+FALLBACK_MODEL = "openai/gpt-oss-20b"
 
 
 def _make_llm(primary: bool = True) -> ChatGroq:
