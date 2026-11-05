@@ -1,6 +1,6 @@
 """
 MetaCoach — Entrenador personal con IA fisiológica
-LangChain Agents + Groq/LLaMA 3.1 70B — análisis wearable + analíticas de sangre
+Reglas + LangChain + Groq/Qwen — análisis wearable + analíticas de sangre
 """
 
 import os
